@@ -45,7 +45,7 @@ Five are included: `bobby` (clueless noob), `herobrine` (creepy ghost), `coach` 
 
 ## What the AI can do
 
-look around, follow, come, stay, emote, hold an item, give items (with a blocklist and max amount), fight hostile mobs, set time and weather, harmless lightning, and use the Shenanigans trolls listed in `actions.trolls`. Turn any of these off under `actions:` in the config.
+look around, follow, come, stay, emote, hold an item, break blocks (chop trees, mine stone or ores, dig, or "break what I'm looking at"; chests and other containers are protected), give items (with a blocklist and max amount), fight hostile mobs, set time and weather, harmless lightning, and use the Shenanigans trolls listed in `actions.trolls`. Turn any of these off under `actions:` in the config.
 
 ## Permissions
 

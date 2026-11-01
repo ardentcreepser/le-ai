@@ -135,6 +135,31 @@ actions:
     - spawner
     - trial_spawner
     - end_portal_frame
+  # Breaking blocks: chopping trees, mining, "break the block I'm looking at"
+  allow-breaking-blocks: true
+  max-blocks-per-request: 16
+  # How far it searches for blocks to break, and how far it can reach
+  mining-radius: 12
+  mining-reach: 5.0
+  # Never break chests, barrels, furnaces, hoppers, shulker boxes...
+  protect-containers: true
+  unbreakable-blocks:
+    - bedrock
+    - barrier
+    - end_portal_frame
+    - end_portal
+    - end_gateway
+    - nether_portal
+    - command_block
+    - chain_command_block
+    - repeating_command_block
+    - structure_block
+    - jigsaw
+    - spawner
+    - trial_spawner
+    - vault
+    - reinforced_deepslate
+    - beacon
   allow-fighting: true
   attack-damage: 5
   fight-seconds: 20

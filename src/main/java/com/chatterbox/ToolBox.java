@@ -5,6 +5,9 @@ import com.google.gson.JsonObject;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.Tag;
+import org.bukkit.block.Block;
+import org.bukkit.block.Container;
 import org.bukkit.World;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Mannequin;
@@ -12,6 +15,8 @@ import org.bukkit.entity.Player;
 import org.bukkit.configuration.file.FileConfiguration;
 
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.function.Predicate;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -80,6 +85,16 @@ public final class ToolBox {
                     param("item", "STRING", "Minecraft item id, e.g. diamond, bread, oak_log"),
                     param("amount", "INTEGER", "How many (max " + cfg().getInt("actions.max-give-amount", 16) + ")")));
         }
+        if (cfg().getBoolean("actions.allow-breaking-blocks", true)) {
+            list.add(fn("break_blocks", "Break or mine blocks like a player: chop a tree, mine stone, dig dirt, clear leaves, "
+                            + "or break the exact block a player is looking at. You walk over and break them one by one; "
+                            + "the items drop on the ground for the players.", false,
+                    required(param("block", "STRING", "What to break: 'looked_at' (the block the player is looking at), "
+                            + "a group: 'tree', 'leaves', 'stone', 'dirt', 'sand', 'ores', or a Minecraft block id like 'oak_log' or 'diamond_ore'.")),
+                    param("count", "INTEGER", "How many blocks (max " + cfg().getInt("actions.max-blocks-per-request", 16)
+                            + "). A whole tree is about 6."),
+                    param("player", "STRING", "Only for 'looked_at': whose view to use. Leave empty for the person talking to you.")));
+        }
         if (cfg().getBoolean("actions.allow-fighting", true)) {
             list.add(fn("fight_mobs", "Attack the hostile mobs (zombies, skeletons, spiders...) near you for a while.", false));
         }
@@ -135,6 +150,11 @@ public final class ToolBox {
         return p;
     }
 
+    private static JsonObject required(JsonObject param) {
+        param.addProperty("__required", true);
+        return param;
+    }
+
     private static JsonObject enumParam(String name, String description, List<String> values) {
         JsonObject p = param(name, "STRING", description);
         JsonArray options = new JsonArray();
@@ -173,6 +193,7 @@ public final class ToolBox {
             }
             case "hold_item" -> holdItem(str(args, "item"));
             case "give_item" -> withPlayer(args, p -> giveItem(p, str(args, "item"), integer(args, "amount", 1)));
+            case "break_blocks" -> breakBlocks(args);
             case "fight_mobs" -> character.fight(cfg().getInt("actions.fight-seconds", 20))
                     ? Result.ok("Fighting the hostile mobs nearby")
                     : Result.fail("There are no hostile mobs nearby");
@@ -317,6 +338,122 @@ public final class ToolBox {
         int count = Math.max(1, Math.min(amount, max));
         plugin.character().give(player, material, count);
         return Result.ok("Threw " + count + " " + itemName(material) + " to " + player.getName());
+    }
+
+    // ------------------------------------------------------------------ breaking blocks
+
+    private Result breakBlocks(JsonObject args) {
+        if (!cfg().getBoolean("actions.allow-breaking-blocks", true)) {
+            return Result.fail("You aren't allowed to break blocks on this server");
+        }
+        String what = str(args, "block").toLowerCase(Locale.ROOT).trim();
+        int max = cfg().getInt("actions.max-blocks-per-request", 16);
+        int count = Math.max(1, Math.min(integer(args, "count", 1), max));
+        Mannequin body = plugin.character().body();
+
+        List<Block> blocks;
+        if (what.isEmpty() || what.equals("looked_at") || what.equals("this") || what.equals("that")) {
+            Player player = resolvePlayer(str(args, "player"));
+            if (player == null) {
+                return Result.fail("Couldn't find that player. Online: " + onlineNames());
+            }
+            Block looked = player.getTargetBlockExact(8);
+            if (looked == null || looked.getType().isAir()) {
+                return Result.fail(player.getName() + " isn't looking at a block close enough");
+            }
+            if (!canBreak(looked)) {
+                return Result.fail("That block is protected and can't be broken");
+            }
+            Material type = looked.getType();
+            blocks = new ArrayList<>();
+            blocks.add(looked);
+            if (count > 1) {
+                for (Block extra : findBlocks(looked.getLocation(), m -> m == type, count)) {
+                    if (!extra.equals(looked) && blocks.size() < count) {
+                        blocks.add(extra);
+                    }
+                }
+            }
+        } else {
+            Predicate<Material> matcher = matcher(what);
+            if (matcher == null) {
+                return Result.fail("There is no block called " + what);
+            }
+            blocks = findBlocks(body.getLocation(), matcher, count);
+            if (blocks.isEmpty()) {
+                return Result.fail("There is no " + what + " within " + cfg().getInt("actions.mining-radius", 12) + " blocks of you");
+            }
+        }
+        int queued = plugin.character().mine(blocks);
+        return Result.ok("Breaking " + queued + " block(s) of " + itemName(blocks.get(0).getType()) + ". The items will drop on the ground.");
+    }
+
+    /** "tree", "stone", "oak_log"... -> which materials count. Null if unknown. */
+    private static Predicate<Material> matcher(String what) {
+        switch (what) {
+            case "tree", "trees", "wood", "log", "logs" -> {
+                return Tag.LOGS::isTagged;
+            }
+            case "leaves", "leaf" -> {
+                return Tag.LEAVES::isTagged;
+            }
+            case "stone", "rock", "rocks" -> {
+                return m -> Tag.BASE_STONE_OVERWORLD.isTagged(m) || m == Material.COBBLESTONE;
+            }
+            case "dirt", "grass", "ground" -> {
+                return Tag.DIRT::isTagged;
+            }
+            case "sand" -> {
+                return Tag.SAND::isTagged;
+            }
+            case "ore", "ores" -> {
+                return m -> m.name().endsWith("_ORE") || m == Material.ANCIENT_DEBRIS;
+            }
+            default -> {
+                Material exact = Material.matchMaterial(what);
+                if (exact == null && what.endsWith("s")) {
+                    exact = Material.matchMaterial(what.substring(0, what.length() - 1));
+                }
+                if (exact == null || !exact.isBlock() || exact.isAir()) {
+                    return null;
+                }
+                Material target = exact;
+                return m -> m == target;
+            }
+        }
+    }
+
+    /** The closest breakable blocks that match, nearest first. */
+    private List<Block> findBlocks(Location center, Predicate<Material> matcher, int count) {
+        int radius = cfg().getInt("actions.mining-radius", 12);
+        List<Block> found = new ArrayList<>();
+        Block origin = center.getBlock();
+        for (int dx = -radius; dx <= radius; dx++) {
+            for (int dy = -4; dy <= 10; dy++) {
+                for (int dz = -radius; dz <= radius; dz++) {
+                    Block block = origin.getRelative(dx, dy, dz);
+                    if (matcher.test(block.getType()) && canBreak(block)) {
+                        found.add(block);
+                    }
+                }
+            }
+        }
+        Location c = origin.getLocation();
+        found.sort(Comparator.comparingDouble(b -> b.getLocation().distanceSquared(c)));
+        return found.size() > count ? new ArrayList<>(found.subList(0, count)) : found;
+    }
+
+    private boolean canBreak(Block block) {
+        Material type = block.getType();
+        if (type.isAir() || block.isLiquid() || type.getHardness() < 0) {
+            return false; // air, water/lava, bedrock-like blocks
+        }
+        for (String blocked : cfg().getStringList("actions.unbreakable-blocks")) {
+            if (type.name().equalsIgnoreCase(blocked)) {
+                return false;
+            }
+        }
+        return !(cfg().getBoolean("actions.protect-containers", true) && block.getState() instanceof Container);
     }
 
     private Result setTime(String value) {

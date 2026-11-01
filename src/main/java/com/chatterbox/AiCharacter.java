@@ -8,6 +8,7 @@ import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.Particle;
 import org.bukkit.Sound;
+import org.bukkit.Tag;
 import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Enemy;
@@ -23,6 +24,8 @@ import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scheduler.BukkitTask;
 import org.bukkit.util.Vector;
 
+import java.util.ArrayDeque;
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
@@ -34,7 +37,7 @@ import java.util.UUID;
  */
 public final class AiCharacter {
 
-    public enum Mode { IDLE, FOLLOW, STAY, COME, FIGHT }
+    public enum Mode { IDLE, FOLLOW, STAY, COME, FIGHT, MINE }
 
     private final ChatterboxPlugin plugin;
     private final NamespacedKey tag;
@@ -47,6 +50,14 @@ public final class AiCharacter {
     private long fightUntil;
     private ItemStack handBeforeFight;
     private int attackCooldown;
+
+    // mining
+    private final ArrayDeque<Block> mineQueue = new ArrayDeque<>();
+    private Block mining;
+    private int mineProgress;
+    private int mineNeeded;
+    private int mineWalkTicks;
+    private ItemStack handBeforeMining;
 
     private volatile UUID focus;
     private volatile long focusUntil;
@@ -123,6 +134,12 @@ public final class AiCharacter {
 
     public void remove() {
         cancelEmote();
+        clearCrack();
+        mineQueue.clear();
+        mining = null;
+        if (mode == Mode.MINE) {
+            mode = Mode.IDLE;
+        }
         Mannequin b = body;
         body = null;
         if (b != null && b.isValid()) {
@@ -151,18 +168,21 @@ public final class AiCharacter {
 
     public void follow(Player player) {
         endFight();
+        stopMining();
         mode = Mode.FOLLOW;
         target = player.getUniqueId();
     }
 
     public void comeTo(Player player) {
         endFight();
+        stopMining();
         mode = Mode.COME;
         target = player.getUniqueId();
     }
 
     public void stay() {
         endFight();
+        stopMining();
         mode = Mode.STAY;
         target = null;
         Mannequin b = body;
@@ -181,6 +201,7 @@ public final class AiCharacter {
         if (enemy == null) {
             return false;
         }
+        stopMining();
         fightTarget = enemy;
         fightUntil = System.currentTimeMillis() + seconds * 1000L;
         if (mode != Mode.FIGHT) {
@@ -204,6 +225,125 @@ public final class AiCharacter {
         handBeforeFight = null;
         fightTarget = null;
         mode = Mode.IDLE;
+    }
+
+    /** Walk to these blocks and break them one by one. Returns how many were queued. */
+    public int mine(Collection<Block> blocks) {
+        Mannequin b = body;
+        if (b == null || !b.isValid() || blocks.isEmpty()) {
+            return 0;
+        }
+        endFight();
+        if (mode != Mode.MINE) {
+            handBeforeMining = b.getEquipment().getItemInMainHand().clone();
+        }
+        clearCrack();
+        mineQueue.clear();
+        mineQueue.addAll(blocks);
+        mining = null;
+        mode = Mode.MINE;
+        return blocks.size();
+    }
+
+    private void stopMining() {
+        if (mode != Mode.MINE) {
+            return;
+        }
+        clearCrack();
+        mineQueue.clear();
+        mining = null;
+        Mannequin b = body;
+        if (b != null && b.isValid() && handBeforeMining != null) {
+            b.getEquipment().setItemInMainHand(handBeforeMining);
+        }
+        handBeforeMining = null;
+        mode = Mode.IDLE;
+    }
+
+    /** Pick the next block to break, skipping ones that are already gone. */
+    private boolean nextMineBlock() {
+        clearCrack();
+        mining = null;
+        while (!mineQueue.isEmpty()) {
+            Block next = mineQueue.poll();
+            if (!next.getType().isAir() && !next.isLiquid()) {
+                mining = next;
+                mineProgress = 0;
+                mineWalkTicks = 0;
+                // roughly how long a player with a good tool takes: stone ~1s, logs ~1.2s, dirt ~0.3s
+                float hardness = next.getType().getHardness();
+                mineNeeded = Math.max(6, Math.min(80, Math.round(hardness * 12)));
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Mining step. Returns where to walk, or null if we're standing still (breaking or done). */
+    private Location mineTick(Mannequin b) {
+        if (mining == null || mining.getType().isAir()) {
+            if (!nextMineBlock()) {
+                stopMining();
+                return null;
+            }
+        }
+        Location center = mining.getLocation().add(0.5, 0.5, 0.5);
+        double reach = plugin.getConfig().getDouble("actions.mining-reach", 5.0);
+        if (b.getEyeLocation().distance(center) > reach) {
+            if (++mineWalkTicks > 100) {
+                nextMineBlock(); // can't get to it in 5 seconds, skip it
+            }
+            return center;
+        }
+
+        Material type = mining.getType();
+        ItemStack tool = toolFor(type);
+        if (b.getEquipment().getItemInMainHand().getType() != tool.getType()) {
+            b.getEquipment().setItemInMainHand(tool);
+        }
+        b.lookAt(center.getX(), center.getY(), center.getZ(), LookAnchor.EYES);
+        b.setVelocity(new Vector(0, b.getVelocity().getY(), 0));
+        mineProgress++;
+        if (mineProgress % 4 == 1) {
+            b.swingMainHand();
+            b.getWorld().playSound(center, mining.getBlockData().getSoundGroup().getHitSound(), 0.6f, 0.8f);
+        }
+        float progress = Math.min(0.99f, (float) mineProgress / mineNeeded);
+        for (Player viewer : b.getWorld().getPlayers()) {
+            if (viewer.getLocation().distanceSquared(center) < 48 * 48) {
+                viewer.sendBlockDamage(mining.getLocation(), progress, b);
+            }
+        }
+        if (mineProgress >= mineNeeded) {
+            Block done = mining;
+            clearCrack();
+            done.breakNaturally(tool, true);
+            mining = null;
+        }
+        return null;
+    }
+
+    private void clearCrack() {
+        Mannequin b = body;
+        if (mining == null || b == null || !b.isValid()) {
+            return;
+        }
+        for (Player viewer : b.getWorld().getPlayers()) {
+            viewer.sendBlockDamage(mining.getLocation(), 0f, b);
+        }
+    }
+
+    private static ItemStack toolFor(Material type) {
+        if (Tag.MINEABLE_AXE.isTagged(type)) {
+            return new ItemStack(Material.DIAMOND_AXE);
+        }
+        if (Tag.MINEABLE_SHOVEL.isTagged(type)) {
+            return new ItemStack(Material.DIAMOND_SHOVEL);
+        }
+        if (Tag.MINEABLE_HOE.isTagged(type)) {
+            return new ItemStack(Material.DIAMOND_HOE);
+        }
+        return new ItemStack(Material.DIAMOND_PICKAXE);
     }
 
     /** Look at this player for a while (used when they talk to us). Safe to call from any thread. */
@@ -449,6 +589,13 @@ public final class AiCharacter {
                 stop = 1.6;
                 attackTick(b);
             }
+            case MINE -> {
+                goal = mineTick(b);
+                if (goal == null) {
+                    return;
+                }
+                stop = 1.2;
+            }
             default -> {
                 return;
             }
@@ -491,7 +638,11 @@ public final class AiCharacter {
         }
         lastProgress = pos;
         if (stuckTicks > 60) {
-            b.teleport(goal); // stuck behind something: just pop over
+            if (mode == Mode.MINE) {
+                nextMineBlock(); // can't reach this one, try the next
+            } else {
+                b.teleport(goal); // stuck behind something: just pop over
+            }
             stuckTicks = 0;
         }
     }
@@ -516,8 +667,8 @@ public final class AiCharacter {
     }
 
     private void lookTick(Mannequin b) {
-        if (mode == Mode.FIGHT && fightTarget != null) {
-            return; // attackTick aims
+        if ((mode == Mode.FIGHT && fightTarget != null) || mode == Mode.MINE) {
+            return; // attackTick / mineTick aim themselves
         }
         Player look = null;
         if (focus != null && System.currentTimeMillis() < focusUntil) {
