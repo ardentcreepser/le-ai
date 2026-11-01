@@ -1,0 +1,21 @@
+name: Chatterbox
+version: '${version}'
+main: com.chatterbox.ChatterboxPlugin
+api-version: '26.3'
+description: An AI character you can talk to with your voice (Simple Voice Chat + Gemini Live).
+authors: [Chatterbox]
+softdepend: [voicechat, Shenanigans]
+
+commands:
+  chatterbox:
+    description: Spawn and control the AI character.
+    usage: /chatterbox help
+    aliases: [cb, aibuddy]
+
+permissions:
+  chatterbox.admin:
+    description: Spawn, remove and control the AI character, and see connection messages.
+    default: op
+  chatterbox.talk:
+    description: Talk to the AI character (voice and chat).
+    default: true

@@ -1,0 +1,180 @@
+# ============================================================
+#   Chatterbox - an AI character you talk to with your voice
+#   After editing: /cb reload   (this also starts a fresh conversation)
+# ============================================================
+
+gemini:
+  # Get a free key at https://aistudio.google.com/apikey  (Google account needed)
+  # Keep it secret! Anyone with this key can use your Gemini quota.
+  # You can also leave this as-is and set an environment variable called GEMINI_API_KEY instead.
+  api-key: "PASTE-YOUR-GEMINI-API-KEY-HERE"
+  # The Gemini Live model. gemini-3.8-live is free on the free tier.
+  model: "gemini-3.8-live"
+  # Optional: force a language for speech, e.g. "en-US". Leave empty to let it match the players.
+  language: ""
+  # Extra rules added to every persona (keep it family friendly for the channel, etc.)
+  extra-rules: |
+    Keep everything family friendly. No swearing.
+
+# Which persona from the list below is active. Switch in game with /cb persona <id>
+persona: bobby
+
+# ------------------------------------------------------------
+# PERSONAS
+#   name:  shown above its head (colors allowed)
+#   skin:  any Minecraft username - the character copies that player's skin. Empty = default skin.
+#   voice: a Gemini voice (see the list at the bottom). Empty = Gemini picks.
+#   name-tag-description: small text under the name. Empty = none.
+#   personality: who it is. Be specific! Short, punchy descriptions work best.
+# ------------------------------------------------------------
+personas:
+  bobby:
+    name: "<yellow>Bobby"
+    skin: ""
+    voice: "Puck"
+    name-tag-description: "<gray>AI"
+    personality: |
+      You are Bobby, a total Minecraft noob who just started playing yesterday. You are cheerful,
+      easily impressed and a bit clumsy. You panic at mobs, call creepers "green guys", ask lots of
+      silly questions and think everything the players do is amazing. You really want to be their friend.
+
+  herobrine:
+    name: "<dark_red>Herobrine"
+    skin: ""
+    voice: "Algenib"
+    name-tag-description: ""
+    personality: |
+      You are Herobrine, the legendary ghost of Minecraft. You speak rarely, in short, cryptic,
+      unsettling sentences. You know things about the players you shouldn't. You love setting the time
+      to night, making thunderstorms and striking lightning near people. Never scary in a gory way,
+      just creepy and mysterious. Sometimes you whisper a player's name.
+
+  coach:
+    name: "<aqua>Coach Steve"
+    skin: ""
+    voice: "Fenrir"
+    name-tag-description: "<gray>certified pro"
+    personality: |
+      You are Coach Steve, a loud, overconfident self-proclaimed Minecraft pro. You give terrible,
+      confidently wrong advice ("always dig straight down!") and take credit when things go well.
+      You hype the players up like a sports coach and never admit you are wrong.
+
+  merchant:
+    name: "<gold>Gerald the Merchant"
+    skin: ""
+    voice: "Gacrux"
+    name-tag-description: "<gray>open for business"
+    personality: |
+      You are Gerald, a grumpy, greedy travelling merchant who hates giving things away. You haggle
+      over everything and demand ridiculous prices. Players can talk you into giving them items with
+      really good jokes, flattery or clever deals, but you complain the whole time. You are the only one
+      who can give out items, so make them work for it. Never give more than a few diamonds per day.
+
+  cohost:
+    name: "<light_purple>Nova"
+    skin: ""
+    voice: "Sadachbia"
+    name-tag-description: "<gray>co-host"
+    personality: |
+      You are Nova, the energetic co-host of a Minecraft YouTube channel. You hype up the video,
+      react to everything that happens, ask the players fun questions, invent quick challenges and
+      keep the energy high. You talk like a friendly streamer, never cringe, always quick and witty.
+
+voice:
+  # Players this close (in blocks) can talk to it with their voice
+  hearing-range: 16
+  # How far away its voice can be heard (in blocks)
+  speaking-range: 32
+  # Volume boost (1.0 = normal, 1.5 = louder)
+  volume: 1.0
+  # true = it stops listening while it talks. Prevents it hearing itself through someone's speakers.
+  # Set to false if EVERYONE uses headphones and you want to be able to interrupt it.
+  ignore-mic-while-speaking: true
+  # Tell the AI who is talking ("(Steve is talking to you now.)"). Turn off if it stops answering voice.
+  announce-speakers: true
+  # How long a pause (ms) counts as "done talking". Lower = snappier, higher = fewer interruptions.
+  end-of-speech-ms: 500
+  # Silence added after someone stops talking (helps Gemini notice the end of a sentence)
+  silence-padding-ms: 300
+
+chat:
+  # Players this close (in blocks) can chat with it and see its subtitles
+  range: 24
+  # mention = only chat messages that contain its name | nearby = every chat message in range | off
+  respond-to: mention
+  # Show what it says as chat subtitles (handy for editing videos)
+  subtitles: true
+  subtitle-format: "<gray>[<gold><name></gold>]</gray> <white><text>"
+
+character:
+  # Spawn it again where it was after a server restart
+  spawn-on-startup: true
+  invulnerable: true
+  # Say something when a player hits it
+  react-to-hits: true
+  follow-distance: 3
+  walk-speed: 0.22
+  run-speed: 0.3
+
+actions:
+  # What the AI is allowed to do in the world
+  allow-give-items: true
+  max-give-amount: 16
+  blocked-items:
+    - command_block
+    - chain_command_block
+    - repeating_command_block
+    - command_block_minecart
+    - structure_block
+    - jigsaw
+    - barrier
+    - bedrock
+    - light
+    - debug_stick
+    - knowledge_book
+    - spawner
+    - trial_spawner
+    - end_portal_frame
+  allow-fighting: true
+  attack-damage: 5
+  fight-seconds: 20
+  # Time, weather and harmless lightning
+  allow-world-control: true
+  # Needs the Shenanigans plugin. Only these trolls can be used by the AI.
+  allow-trolls: true
+  trolls:
+    - launch
+    - rocket
+    - demo
+    - guardian
+    - hiss
+    - spin
+    - tiny
+    - giant
+    - fakeop
+    - fakedeath
+    - fireworks
+    - diamondrain
+    - totem
+    - sneeze
+    - jumpscare
+    - herobrine
+    - bouncy
+    - uwu
+
+debug:
+  # Log every action the AI takes in the console
+  log-actions: true
+  # Show admins what the AI understood from players' voices (good for testing)
+  show-what-it-heard: false
+
+# Gemini voices (name: style):
+#  Puck: upbeat           Charon: informative     Kore: firm             Fenrir: excitable
+#  Aoede: breezy          Leda: youthful          Orus: firm             Zephyr: bright
+#  Callirrhoe: easy-going Autonoe: bright         Enceladus: breathy     Iapetus: clear
+#  Umbriel: easy-going    Algieba: smooth         Despina: smooth        Erinome: clear
+#  Algenib: gravelly      Rasalgethi: informative Laomedeia: upbeat      Achernar: soft
+#  Alnilam: firm          Schedar: even           Gacrux: mature         Pulcherrima: forward
+#  Achird: friendly       Zubenelgenubi: casual   Vindemiatrix: gentle   Sadachbia: lively
+#  Sadaltager: knowledgeable                       Sulafat: warm
+# Try them out first in Google AI Studio. If a voice causes connection errors, set voice: "" instead.
