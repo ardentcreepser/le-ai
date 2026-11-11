@@ -109,7 +109,8 @@ public final class ChatterboxCommand implements TabExecutor {
                     Msg.send(sender, "<red>The character isn't connected right now.");
                     return true;
                 }
-                brain.direct(String.join(" ", Arrays.copyOfRange(args, 1, args.length)));
+                brain.direct(String.join(" ", Arrays.copyOfRange(args, 1, args.length)),
+                        sender instanceof Player director ? director.getUniqueId() : null);
                 Msg.send(sender, "<gray><italic>Director note sent.");
             }
             case "emote" -> {
@@ -204,6 +205,9 @@ public final class ChatterboxCommand implements TabExecutor {
         sender.sendMessage(Msg.mm("<gray>  Voice chat: " + (plugin.hasVoiceChat() ? "<green>hooked in" : "<yellow>not installed (text only)")));
         sender.sendMessage(Msg.mm("<gray>  Body: " + (character.isSpawned()
                 ? "<green>spawned, " + character.mode().name().toLowerCase(Locale.ROOT) : "<gray>not spawned")));
+        sender.sendMessage(Msg.mm("<gray>  Op powers (commands): " + (plugin.getConfig().getBoolean("actions.commands.enabled", true)
+                ? "<green>on <gray>(who can ask: <white><who></white>)" : "<yellow>off"),
+                Msg.ph("who", plugin.getConfig().getString("actions.commands.who-can-ask", "everyone"))));
         sender.sendMessage(Msg.mm("<gray>  Actions: <white><count></white> available",
                 Msg.ph("count", String.valueOf(plugin.tools().declarations().size()))));
     }

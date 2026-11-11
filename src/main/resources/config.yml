@@ -118,6 +118,58 @@ character:
 
 actions:
   # What the AI is allowed to do in the world
+
+  # OP POWERS: the AI can run any Minecraft command, like an opped player typing it in chat.
+  # Commands run from its body, so ~ ~ ~ and @s mean the AI. It sees the output, so it can fix mistakes.
+  # Every command it runs is written to the server console.
+  commands:
+    enabled: true
+    # Who can get it to run commands: everyone | ops | permission (players with chatterbox.commands)
+    who-can-ask: everyone
+    # Also show admins in chat every command it runs
+    announce-to-admins: false
+    max-length: 500
+    # Commands it can NEVER run. Prefixes like minecraft: and commands hidden inside /execute are caught too.
+    blocked:
+      - stop
+      - restart
+      - reload
+      - rl
+      - op
+      - deop
+      - ban
+      - ban-ip
+      - pardon
+      - pardon-ip
+      - banlist
+      - whitelist
+      - save-off
+      - save-on
+      - datapack
+      - debug
+      - jfr
+      - perf
+      - publish
+      - transfer
+      - setidletimeout
+      - paper
+      - spigot
+      - bukkit
+      - timings
+      - plugman
+      - sudo
+      - esudo
+      - chatterbox
+      - cb
+      - aibuddy
+    # Every command from these plugins is blocked (permissions plugins, so it can't promote anyone)
+    blocked-plugins:
+      - LuckPerms
+      - PermissionsEx
+      - GroupManager
+      - Chatterbox
+  # Place single blocks where a player is looking ("put a torch here")
+  allow-placing-blocks: true
   allow-give-items: true
   max-give-amount: 16
   blocked-items:

@@ -7,7 +7,13 @@ import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.Tag;
 import org.bukkit.block.Block;
+import org.bukkit.block.BlockFace;
 import org.bukkit.block.Container;
+import org.bukkit.block.data.Bisected;
+import org.bukkit.block.data.BlockData;
+import org.bukkit.block.data.Directional;
+import org.bukkit.block.data.type.Bed;
+import org.bukkit.util.RayTraceResult;
 import org.bukkit.World;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Mannequin;
@@ -49,8 +55,11 @@ public final class ToolBox {
 
     private final ChatterboxPlugin plugin;
 
+    private final CommandRunner commands;
+
     public ToolBox(ChatterboxPlugin plugin) {
         this.plugin = plugin;
+        this.commands = new CommandRunner(plugin);
     }
 
     private FileConfiguration cfg() {
@@ -67,8 +76,9 @@ public final class ToolBox {
 
     public JsonArray declarations() {
         JsonArray list = new JsonArray();
-        list.add(fn("look_around", "See what is around you right now: nearby players (and what they hold), mobs, "
-                + "time of day, weather, biome and your own state. Use it whenever you need to know what's going on.",
+        list.add(fn("look_around", "See what is around you right now: your position, nearby players (where they are, "
+                + "what they hold and which block they are looking at), mobs, time of day, weather and biome. "
+                + "Use it whenever you need to know what's going on, and before building or using coordinates.",
                 true));
         list.add(fn("follow_player", "Start following a player around until told otherwise.", false,
                 param("player", "STRING", "Player name. Leave empty for the person talking to you.")));
@@ -84,6 +94,22 @@ public final class ToolBox {
                     param("player", "STRING", "Player name. Leave empty for the person talking to you."),
                     param("item", "STRING", "Minecraft item id, e.g. diamond, bread, oak_log"),
                     param("amount", "INTEGER", "How many (max " + cfg().getInt("actions.max-give-amount", 16) + ")")));
+        }
+        if (commands.enabled()) {
+            list.add(fn("run_command", "Run any Minecraft command, exactly like a server operator (op) typing it in chat. "
+                            + "It runs from YOUR body: ~ ~ ~ is where you stand, ^ ^ ^ is relative to where you face, @s is you "
+                            + "and @p is the player closest to you. Use it for anything your other tools can't do: give items, "
+                            + "summon mobs, potion effects, teleport (tp @s Steve brings you to Steve), gamemode, enchant, xp, "
+                            + "build with setblock or fill, particles, title, kill mobs. You get the command's output back: "
+                            + "if it failed, read the error, fix the command and try again. A few admin commands are blocked.", true,
+                    required(param("command", "STRING", "The command without the slash, e.g. 'give Steve diamond 5', "
+                            + "'effect give @p speed 30 1' or 'fill ~-2 ~ ~-2 ~2 ~3 ~2 glass hollow'"))));
+        }
+        if (cfg().getBoolean("actions.allow-placing-blocks", true)) {
+            list.add(fn("place_block", "Place one block like a player would: against the block a player is looking at. "
+                            + "For bigger builds use run_command with setblock or fill.", false,
+                    required(param("block", "STRING", "Minecraft block id, e.g. torch, oak_planks, glass, tnt")),
+                    param("player", "STRING", "Whose view to use. Leave empty for the person talking to you.")));
         }
         if (cfg().getBoolean("actions.allow-breaking-blocks", true)) {
             list.add(fn("break_blocks", "Break or mine blocks like a player: chop a tree, mine stone, dig dirt, clear leaves, "
@@ -168,7 +194,7 @@ public final class ToolBox {
 
     public Result execute(String name, JsonObject args) {
         AiCharacter character = plugin.character();
-        if (!character.isSpawned() && !name.equals("set_time") && !name.equals("set_weather")) {
+        if (!character.isSpawned() && !name.equals("set_time") && !name.equals("set_weather") && !name.equals("run_command")) {
             return Result.fail("You don't have a body in the world right now.");
         }
         return switch (name) {
@@ -194,6 +220,8 @@ public final class ToolBox {
             case "hold_item" -> holdItem(str(args, "item"));
             case "give_item" -> withPlayer(args, p -> giveItem(p, str(args, "item"), integer(args, "amount", 1)));
             case "break_blocks" -> breakBlocks(args);
+            case "run_command" -> runCommand(str(args, "command"));
+            case "place_block" -> withPlayer(args, p -> placeBlock(p, str(args, "block")));
             case "fight_mobs" -> character.fight(cfg().getInt("actions.fight-seconds", 20))
                     ? Result.ok("Fighting the hostile mobs nearby")
                     : Result.fail("There are no hostile mobs nearby");
@@ -263,7 +291,10 @@ public final class ToolBox {
         JsonObject out = new JsonObject();
 
         JsonObject you = new JsonObject();
-        you.addProperty("position", here.getBlockX() + " " + here.getBlockY() + " " + here.getBlockZ());
+        you.addProperty("position", coords(here));
+        you.addProperty("facing", here.getDirection().getZ() > 0.7 ? "south" : here.getDirection().getZ() < -0.7 ? "north"
+                : here.getDirection().getX() > 0 ? "east" : "west");
+        you.addProperty("standing_on", itemName(here.clone().subtract(0, 0.5, 0).getBlock().getType()));
         you.addProperty("world", world.getName());
         you.addProperty("health", Math.round(body.getHealth()));
         you.addProperty("holding", itemName(body.getEquipment().getItemInMainHand().getType()));
@@ -288,6 +319,11 @@ public final class ToolBox {
             info.addProperty("holding", itemName(p.getInventory().getItemInMainHand().getType()));
             info.addProperty("health", Math.round(p.getHealth()) + "/20");
             info.addProperty("game_mode", p.getGameMode().name().toLowerCase(Locale.ROOT));
+            info.addProperty("position", coords(p.getLocation()));
+            Block looking = p.getTargetBlockExact(8);
+            if (looking != null && !looking.getType().isAir()) {
+                info.addProperty("looking_at_block", itemName(looking.getType()) + " at " + coords(looking.getLocation()));
+            }
             players.add(info);
         }
         out.add("players_nearby", players);
@@ -454,6 +490,97 @@ public final class ToolBox {
             }
         }
         return !(cfg().getBoolean("actions.protect-containers", true) && block.getState() instanceof Container);
+    }
+
+    // ------------------------------------------------------------------ op powers
+
+    /** Tools where the AI waits for the answer before it keeps talking. */
+    public boolean isBlocking(String name) {
+        return name.equals("look_around") || name.equals("run_command");
+    }
+
+    private Result runCommand(String command) {
+        if (!commands.enabled()) {
+            return Result.fail("You can't run commands on this server");
+        }
+        if (command.isBlank()) {
+            return Result.fail("No command given");
+        }
+        int max = cfg().getInt("actions.commands.max-length", 500);
+        if (command.length() > max) {
+            return Result.fail("That command is too long (max " + max + " characters)");
+        }
+        UUID speaker = plugin.brain() == null ? null : plugin.brain().lastSpeaker();
+        String problem = commands.speakerProblem(speaker);
+        if (problem != null) {
+            return Result.fail(problem);
+        }
+        String blocked = commands.blockedReason(command);
+        if (blocked != null) {
+            return Result.fail(blocked + ". That command is blocked on this server.");
+        }
+        CommandRunner.Outcome outcome = commands.run(plugin.character().body(), command);
+        JsonObject response = new JsonObject();
+        response.addProperty(outcome.ok() ? "result" : "error", outcome.output());
+        return new Result(response, outcome.ok());
+    }
+
+    private Result placeBlock(Player player, String id) {
+        Material material = Material.matchMaterial(id);
+        if (material == null || !material.isBlock() || material.isAir()) {
+            return Result.fail("There is no block called " + id);
+        }
+        for (String blocked : cfg().getStringList("actions.blocked-items")) {
+            if (material.name().equalsIgnoreCase(blocked)) {
+                return Result.fail("You are not allowed to place " + itemName(material));
+            }
+        }
+        RayTraceResult hit = player.rayTraceBlocks(8);
+        if (hit == null || hit.getHitBlock() == null || hit.getHitBlockFace() == null) {
+            return Result.fail(player.getName() + " isn't looking at a block close enough");
+        }
+        BlockFace face = hit.getHitBlockFace();
+        Block target = hit.getHitBlock().getRelative(face);
+        if (!(target.isEmpty() || target.isReplaceable())) {
+            return Result.fail("There's already a block there");
+        }
+        if (!target.getWorld().getNearbyEntities(org.bukkit.util.BoundingBox.of(target)).stream().allMatch(e -> e instanceof org.bukkit.entity.Item)
+                && material.isSolid()) {
+            return Result.fail("Someone is standing there");
+        }
+
+        // torches on walls become wall torches
+        Material placed = material;
+        if (face != BlockFace.UP && face != BlockFace.DOWN) {
+            Material wall = Material.matchMaterial(material.name().replace("TORCH", "WALL_TORCH"));
+            if (material.name().endsWith("TORCH") && wall != null) {
+                placed = wall;
+            }
+        }
+        BlockData data = placed.createBlockData();
+        if (data instanceof Bisected || data instanceof Bed) {
+            return Result.fail("You can't place doors, beds or tall plants this way. Use run_command with setblock instead.");
+        }
+        if (data instanceof Directional directional && directional.getFaces().contains(face)) {
+            directional.setFacing(face);
+        }
+        if (!target.canPlace(data)) {
+            return Result.fail(itemName(material) + " can't be placed there");
+        }
+        target.setBlockData(data, true);
+
+        Mannequin body = plugin.character().body();
+        Location center = target.getLocation().add(0.5, 0.5, 0.5);
+        if (body != null && body.isValid()) {
+            body.lookAt(center.getX(), center.getY(), center.getZ(), io.papermc.paper.entity.LookAnchor.EYES);
+            body.swingMainHand();
+        }
+        target.getWorld().playSound(center, data.getSoundGroup().getPlaceSound(), 1f, 0.8f);
+        return Result.ok("Placed " + itemName(material) + " at " + coords(target.getLocation()));
+    }
+
+    private static String coords(Location location) {
+        return location.getBlockX() + " " + location.getBlockY() + " " + location.getBlockZ();
     }
 
     private Result setTime(String value) {

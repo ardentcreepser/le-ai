@@ -47,12 +47,24 @@ Five are included: `bobby` (clueless noob), `herobrine` (creepy ghost), `coach` 
 
 look around, follow, come, stay, emote, hold an item, break blocks (chop trees, mine stone or ores, dig, or "break what I'm looking at"; chests and other containers are protected), give items (with a blocklist and max amount), fight hostile mobs, set time and weather, harmless lightning, and use the Shenanigans trolls listed in `actions.trolls`. Turn any of these off under `actions:` in the config.
 
+## Op powers
+
+The AI is effectively an op: with its `run_command` action it can run any command an op could type, like `give`, `summon`, `effect`, `tp`, `gamemode`, `enchant`, `setblock` and `fill`. Commands run from its body, so `~ ~ ~` and `@s` mean the AI, and it gets the output back, so it can fix its own mistakes.
+
+Guardrails, all in `config.yml` under `actions.commands`:
+
+- Server-admin commands are always blocked: stop, reload, op/deop, ban, whitelist and similar, plus permission plugins like LuckPerms. Commands hidden inside `/execute ... run` are checked too.
+- `who-can-ask`: `everyone` (default), `ops`, or `permission` (players with `chatterbox.commands`).
+- Every command it runs is logged in the server console. Turn on `announce-to-admins` to also see them in chat.
+- To hide the grey `[Server: ...]` messages ops see when it runs commands, set `broadcast-console-to-ops=false` in `server.properties`.
+
 ## Permissions
 
 | Permission | Default | |
 |---|---|---|
 | `chatterbox.admin` | op | All `/cb` commands and connection messages |
 | `chatterbox.talk` | everyone | Talk to it by voice or chat |
+| `chatterbox.commands` | everyone | Ask it to run commands (only when `who-can-ask: permission`) |
 
 ## How it works
 

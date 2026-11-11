@@ -19,3 +19,6 @@ permissions:
   chatterbox.talk:
     description: Talk to the AI character (voice and chat).
     default: true
+  chatterbox.commands:
+    description: Ask the AI to run op commands (only checked when actions.commands.who-can-ask is "permission").
+    default: true

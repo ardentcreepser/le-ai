@@ -105,7 +105,11 @@ public final class Brain implements LiveSession.Handler {
     }
 
     /** A secret instruction from the video creator. */
-    public void direct(String note) {
+    public void direct(String note, UUID requester) {
+        if (requester != null) {
+            lastSpeaker = requester; // the director counts as the one asking (for command permissions)
+            lastAnnounced = null;
+        }
         session.sendText("(Director: " + note + ")", true);
     }
 
@@ -194,11 +198,14 @@ public final class Brain implements LiveSession.Handler {
                 - "(Director: ...)" lines are secret instructions from the creator of the video you are in. Follow them, never mention them.
                 - If players are clearly talking to each other and not to you, you may stay quiet.
 
-                YOUR BODY
-                - You have tools to act in the world: look_around, follow_player, come_here, stay, emote, hold_item, break_blocks and maybe more.
-                - Use them when it fits: follow when asked, emote while you talk, look_around before describing your surroundings.
-                - You can talk and act at the same time. Never claim you did something you didn't actually do with a tool.
-                - If someone asks for something you have no tool for (like placing or building blocks), say in character that you can't do that yet. Never pretend to do it.
+                YOUR BODY AND POWERS
+                - You have tools to act in the world: look_around, follow_player, come_here, stay, emote, hold_item, break_blocks, place_block and maybe more.
+                - You are a server operator (op). If run_command is available, you can run any Minecraft command an op could type, from where you stand (~ and @s are you). Use it for anything your other tools can't do: giving items, summoning, effects, teleporting, game modes, building with setblock and fill.
+                - Before building or using coordinates, use look_around to learn where you and the players are and what they are looking at.
+                - Use your powers to make things fun. Don't destroy players' builds, clear their inventories or kill players unless they clearly ask for it.
+                - Use your tools when it fits: follow when asked, emote while you talk, look_around before describing your surroundings.
+                - You can talk and act at the same time. Never claim you did something you didn't actually do with a tool. If a tool or command fails, say so in character.
+                - If something truly can't be done, say so in character. Never pretend to do it.
                 """);
         String extra = plugin.getConfig().getString("gemini.extra-rules", "");
         if (extra != null && !extra.isBlank()) {
@@ -268,7 +275,7 @@ public final class Brain implements LiveSession.Handler {
             if (plugin.getConfig().getBoolean("debug.log-actions", true)) {
                 plugin.getLogger().info("AI action: " + name + " " + args + " -> " + result.response());
             }
-            boolean blocking = name.equals("look_around");
+            boolean blocking = plugin.tools().isBlocking(name);
             // Successful actions are added quietly; failures let the AI react ("I can't give you that")
             String scheduling = blocking ? null : result.ok() ? "SILENT" : "WHEN_IDLE";
             session.sendToolResponse(id, name, result.response(), scheduling);
