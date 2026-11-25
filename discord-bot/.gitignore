@@ -1,0 +1,5 @@
+build/
+.gradle/
+package/
+# your real settings (with your token and key) never go on GitHub
+/config.yml
