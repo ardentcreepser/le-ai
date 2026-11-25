@@ -1,0 +1,52 @@
+name: Build BobbyBot (Discord bot)
+
+on:
+  push:
+    paths:
+      - 'discord-bot/**'
+      - '.github/workflows/discord-bot.yml'
+  pull_request:
+    paths:
+      - 'discord-bot/**'
+      - '.github/workflows/discord-bot.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: discord-bot
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Java 25
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Build
+        run: |
+          chmod +x gradlew
+          ./gradlew shadowJar --no-daemon
+
+      - name: Self-test (audio libraries, voice encryption, Gemini setup)
+        run: java -jar build/libs/BobbyBot.jar --selftest
+
+      - name: Package
+        run: |
+          mkdir -p package
+          cp build/libs/BobbyBot.jar package/
+          cp src/main/resources/config.yml package/config.yml
+          cp start.bat start.sh README.md package/
+          chmod +x package/start.sh
+
+      - name: Upload BobbyBot
+        uses: actions/upload-artifact@v7
+        with:
+          name: BobbyBot
+          path: discord-bot/package/

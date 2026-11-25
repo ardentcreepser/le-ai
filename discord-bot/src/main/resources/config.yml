@@ -1,0 +1,87 @@
+# ============================================================
+#   Bobby - the AI Discord bot
+#   Edit this file, save it, then restart the bot.
+#   Keep the tokens below SECRET. Never upload this file anywhere.
+# ============================================================
+
+discord:
+  # From https://discord.com/developers/applications > your app > Bot > Reset Token
+  # (You can also leave this and set an environment variable called DISCORD_TOKEN instead.)
+  token: "PASTE-YOUR-DISCORD-BOT-TOKEN-HERE"
+
+gemini:
+  # Free key from https://aistudio.google.com/apikey  (or set GEMINI_API_KEY)
+  api-key: "PASTE-YOUR-GEMINI-API-KEY-HERE"
+  # gemini-3.8-live is free on Google's free tier
+  model: "gemini-3.8-live"
+  # Optional: force a speech language, e.g. "en-US". Empty = match whoever is talking.
+  language: ""
+  # Disconnect from Gemini after this many minutes with nobody talking to Bobby (saves free quota).
+  # He still remembers the conversation for about 2 hours afterwards.
+  idle-minutes: 10
+  extra-rules: |
+    Keep everything family friendly. No swearing.
+
+bobby:
+  # His name. People can say or type it to get his attention.
+  name: "Bobby"
+  # A Gemini voice: Puck, Charon, Kore, Fenrir, Aoede, Leda, Orus, Zephyr, Achird, Sadachbia, ...
+  voice: "Puck"
+  # Shown as "Playing ..." under his name. Empty = nothing.
+  status: "Minecraft (badly)"
+  personality: |
+    You are Bobby, a total Minecraft noob who just started playing yesterday. You are cheerful,
+    easily impressed and a bit clumsy. You panic about mobs, call creepers "green guys", ask lots of
+    silly questions and think everything the others do is amazing. You really want to be their friend.
+    You hang out with them in their Discord server, both in voice calls and in the text chat.
+
+voice:
+  # Leave the voice channel when everyone else has left it
+  leave-when-alone: true
+  # false = you can interrupt Bobby by talking over him (recommended on Discord).
+  # true  = he ignores everyone while he is talking.
+  ignore-mic-while-speaking: false
+  # Tell the AI who is talking ("(Steve is talking to you now.)")
+  announce-speakers: true
+  # Bobby says hi when someone joins his voice channel
+  greet-people: true
+  # How long a pause (ms) counts as "done talking". Lower = snappier, higher = fewer interruptions.
+  end-of-speech-ms: 500
+  # Silence added after someone stops talking (helps Gemini notice the end of a sentence)
+  silence-padding-ms: 300
+  # Volume boost (1.0 = normal)
+  volume: 1.0
+  # Don't listen to other bots (music bots etc.)
+  ignore-bots: true
+  # Post what Bobby says in the text channel where /bobby join was used (handy for editing videos)
+  subtitles: true
+
+chat:
+  # mention = when you @mention him, reply to one of his messages, or type his name
+  #           (plus every message in the chat-channels below, and in the chat of his voice channel)
+  # all     = every message in every channel he can see (can get very chatty!)
+  # off     = never answer text messages
+  respond-to: mention
+  # Channel IDs where Bobby answers every message, for example:
+  # chat-channels:
+  #   - "123456789012345678"
+  # To get an ID: Discord Settings > Advanced > turn on Developer Mode, then right-click a channel > Copy Channel ID.
+  chat-channels: []
+  # Answer direct messages
+  allow-dms: true
+
+actions:
+  # What Bobby is allowed to do by himself
+  allow-reactions: true
+  allow-messages: true
+  allow-status: true
+  allow-nickname: true
+  allow-polls: true
+  allow-soundboard: true
+  allow-voice-control: true
+
+debug:
+  # Log every action Bobby takes
+  log-actions: true
+  # Log what Bobby understood from people's voices (good for testing)
+  show-what-it-heard: false
